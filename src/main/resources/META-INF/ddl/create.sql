@@ -1,0 +1,5 @@
+CREATE TABLE stock (symbol INTEGER,date_day TIMESTAMP,open DOUBLE,high DOUBLE,low DOUBLE,close DOUBLE,volume BIGINT,turnover BIGINT,change DOUBLE,counts BIGINT,m20 double,bbh double,bbl double,primary key (symbol,date_day));
+CREATE TABLE stock_status (symbol INTEGER,year_month INTEGER,status INTEGER,date_day TIMESTAMP);
+CREATE TABLE stock_info (symbol INTEGER,ex_ch char(3),name char(20),date_day1 INTEGER,date_day2 INTEGER,level_1 DOUBLE,level_2 DOUBLE,level_3 DOUBLE,bs_max_date_day INTEGER,bs_max DOUBLE);
+CREATE TABLE users(username VARCHAR(45) NOT NULL,password VARCHAR(60) NOT NULL,enabled boolean,PRIMARY KEY (username));
+CREATE TABLE user_roles(user_role_id INT IDENTITY,username VARCHAR(45) NOT NULL,ROLE VARCHAR(45) NOT NULL,CONSTRAINT uni_username_role UNIQUE  (ROLE,username),CONSTRAINT fk_username FOREIGN KEY (username) REFERENCES users (username));

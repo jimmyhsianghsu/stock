@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Stock</title>
+<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+<script>
+	function get(name){if(name=(new RegExp('[?&]'+encodeURIComponent(name)+'=([^&]*)')).exec(location.search))return decodeURIComponent(name[1]);return '';}
+	function mark(test,name){document.getElementById(test).innerHTML='&nbsp;'+get(name);}
+	function refresh(id){document.getElementById(id).src='captcha.jpg';}
+</script>
+</head>
+<body onload='document.loginForm.username.focus();mark("markSpan","targetUrl");'>
+<h2>Login</h2>
+<form name='loginForm' action="j_spring_security_check" method='POST'>
+	<table>
+		<tr>
+			<td>User:</td><td><input type='text' name='username' style='width:100%;' /></td>
+		</tr>
+		<tr>
+			<td>Password:</td><td><input type='password' name='password' style='width:100%;' /></td>
+		</tr>
+		<tr>
+			<td>verifyCode:</td><td><input type='text' name='verifyCode' style='width:100%;'/></td>
+		</tr>
+		<tr>
+			<td><input type='button' value='refresh' onclick="refresh('captcha')"/></td>
+			<td><img src='captcha.jpg' width='200px' height='50px' id='captcha'/></td>
+		</tr>
+		<tr>
+			<td colspan='2' align='right'>
+				<input type="submit" value="login" />
+				<input type="button" value="logout" onclick="window.location='j_spring_security_logout';"/>
+			</td>
+		</tr>
+		<tr style='color:white'><td>targetUrl</td><td><span id='markSpan'></span></td></tr>
+	</table>
+</form>
+<h2>Link</h2>
+<ul>
+	<li><a href='login'>login</a></li>
+	<li><a href='stockNow.html'>stockNow.html</a></li>
+	<li><a href='dbm.html'>dbm.html</a></li>
+	<li><a href='admin.html'>admin.html</a></li>
+	<li><a href='dbm1.html'>dbm1.html</a></li>
+</ul>
+</body>
+</html>

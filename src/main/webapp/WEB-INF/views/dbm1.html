@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>dbm1</title>
+	<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+	<script type="text/javascript" src="jquery/jquery.min.js"></script>
+<script>
+	$(function(){
+		$('#btnGetTables1').click(function(){getTables($('#inputDb1').val(),function(data){genSel('#selTables1',data);});});
+		$('#btnGetTables2').click(function(){getTables($('#inputDb2').val(),function(data){genSel('#selTables2',data);});});
+		$('#btnCreateSqls1').click(function(){
+			createSqls($('#inputDb1').val(),$('#selTables1').find(':selected').val(),function(data){appendTd('#tdResult',data);});
+		});
+		$('#btnCreateSqls2').click(function(){
+			createSqls($('#inputDb2').val(),$('#selTables2').find(':selected').val(),function(data){appendTd('#tdResult',data);});
+		});
+		$('#btnTransfer').click(function(){
+			transfer($('#inputDb1').val(),$('#inputDb2').val(),$('#selTables1').find(':selected').val(),function(data){appendTd('#tdResult',data);});
+		});
+	});
+	function getTables(params,callback){
+		if(params)
+		$.ajax('db/ext/tables',{method:'GET',dataType:'json',data:{params:params},
+			success:function(data){if(data)callback(data);},error:function(){console.error('fail');}
+		});
+	}
+	function createSqls(params,table,callback){
+		if(params && table)
+		$.ajax('db/ext/createSqls',{method:'POST',dataType:'json',data:{params:params,table:table},
+			success:function(data){if(data)callback(data);},error:function(){console.error('fail');}
+		});
+	}
+	function transfer(params1,params2,table1,callback){
+		if(params1 && params2 && table1)
+		$.ajax('db/ext/transfer',{method:'POST',dataType:'json',data:{params1:params1,params2:params2,table1:table1},
+			success:function(data){if(data)callback(data);},error:function(){console.error('fail');}
+		});
+	}
+	function genSel(idSel,data){
+		var $sel=$(idSel).empty().append($('<option></option>').attr('value','').text(''));
+		if(data && data.length)for(var i=0;i<data.length;i++)$sel.append($('<option></option>').attr('value',data[i]).text(data[i]));
+	}
+	function appendTd(idTd,data){
+		var $td=$(idTd).empty();
+		if(data && data.length)for(var i in data)$td.append($('<div></div>').html(data[i]));
+	}
+</script>
+</head>
+<body>
+	<table border='1' style='border-collapse:collapse;font-size:10px;width:100%;'>
+		<tr>
+			<td>Database1</td>
+			<td>
+				<input id='inputDb1' type='text' style='width:300px' value='jdbc:hsqldb:file:/tmp/db/testdb,sa,' />
+				<input id='btnGetTables1' type='button' value='getTables1' />
+				<select id='selTables1'></select>
+				<input id='btnCreateSqls1' type='button' value='createSqls1' />
+				<input id='btnTransfer' type='button' value='transfer' />
+			</td>
+		</tr>
+		<tr>
+			<td>Database2</td>
+			<td>
+				<input id='inputDb2' type='text' style='width:300px' value='jdbc:hsqldb:file:./db/testdb,sa,' />
+				<input id='btnGetTables2' type='button' value='getTables2' />
+				<select id='selTables2'></select>
+				<input id='btnCreateSqls2' type='button' value='createSqls2' />
+			</td>
+		</tr>
+		<tr>
+			<td colspan='2' id='tdResult'>
+				tdResult
+			</td>
+		</tr>
+	</table>
+</body>
+</html>

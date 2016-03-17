@@ -1,0 +1,5 @@
+DROP TABLE stock IF EXISTS;
+DROP TABLE stock_status IF EXISTS;
+DROP TABLE stock_info IF EXISTS;
+DROP TABLE user_roles IF EXISTS;
+DROP TABLE users IF EXISTS;

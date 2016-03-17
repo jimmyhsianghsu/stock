@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>dbm</title>
+	<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+	<script type="text/javascript" src="jquery/jquery.min.js"></script>
+<script>
+	function textarea(top){return $("<textarea style='width:100%;height:100%;border:0;margin:0;padding:0;resize:none;white-space:nowrap'></textarea>")
+		.css({position:'relative',top:top});
+	}
+	function selTable(idBtn,idResult,idInput){
+		var $sel=$('<select></select>');
+		var getTables=function(){
+			$.ajax('db/tables',{method:'GET',dataType:'json',
+				success:function(data){
+					$sel.empty().append($('<option></option>').attr('value','').text(''));
+					if(data && data.length)for(var i=0;i<data.length;i++)$sel.append($('<option></option>').attr('value',data[i]).text(data[i]));
+				},error:function(){$sel.append($('<option></option>').attr('value',$sel.children('option').size()).text($sel.children('option').size()));}
+			});
+		}
+		$sel.change(function(){
+			if($(this).find(':selected').val())
+			$.ajax('db/'+$(this).find(':selected').val(),{method:'GET',dataType:'json',
+				success:function(data){if(idResult)$(idResult).empty().append(tableData(data));},
+				error:function(){console.error('fail');}
+			});
+			else if(idResult)$(idResult).empty();
+			if(idInput)$(idInput).val($(this).find(':selected').val());
+		});
+		this.getSel=function(){return $sel;}
+		if(idBtn)$(idBtn).click(function(){getTables()});
+		$(idInput).on('keyup',function(e){
+			var val=$(this).val().toUpperCase();
+			if(e.which==13)$sel.children('option').each(function(){if($(this).val()==val)$sel.val(val).trigger('change');});
+		});
+	}
+		function tableData(data){
+			var $tab=$("<table border='1' style='border-collapse:collapse;font-size:10px;margin:0px;'></table>");
+			if(data && data.length){
+				var $tr0=$('<tr></tr>').css('background-color','#aaeeee');
+				for(var c in data[0])$tr0.append($('<td></td>').html(c));
+				$tab.append($tr0);
+				for(var r in data){
+					var $tr=$('<tr></tr>');
+					for(var c in data[r])$tr.append($('<td></td>').css('white-space','nowrap').html(data[r][c]));
+					$tab.append($tr);
+				}
+			}
+			return $tab;
+		}
+	function getRows(table,idResult){
+		$.ajax('db/'+table+'/rows',{method:'GET',dataType:'json',
+			success:function(data){if(idResult)$(idResult).empty().append(tableData(data));},
+			error:function(){console.error('fail');}
+		});
+	}
+	function sqlExecute(idEdit,idSuccess,idResult){
+		var sqls=$('textarea',idEdit).val().trim();
+		$('textarea',idEdit).val('');
+		$(idResult).empty();
+		$.ajax('db/execute',{method:'POST',dataType:'json',data:{sqls:sqls},
+			success:function(data){
+				if(data && data.length)
+					for(var i in data){
+						if(data[i][0]['SUCCESS'])$('textarea',idSuccess).val($('textarea',idSuccess).val()+data[i][0]['SQL']);
+						else $('textarea',idEdit).val($('textarea',idEdit).val()+data[i][0]['SQL']);
+						if(data[i].length>1)data[i].splice(0,1);
+						$('#divResult').append(tableData(data[i]));
+						$('textarea',idSuccess).scrollTop($('textarea',idSuccess)[0].scrollHeight);
+					}
+			},error:function(){console.error('fail');}
+		});
+	}
+	$(function(){
+		$('#tdCtrl').children('#spanSel').append(new selTable('#btnTables','#divResult','#inputTable').getSel());
+		$('#tdEdit').append(textarea(2)).height($(window).height()*4/10);
+		$('#divSuccess').append(textarea(0)).height($(window).height()*8/10);
+		$('#divResult').height($(window).height()*4/10).width(function(){return $(this).parent().width();});
+		$('#btnRows').click(function(){getRows($('#inputTable').val(),'#divResult');});
+		$('#btnSqlExecute').click(function(){sqlExecute('#tdEdit','#divSuccess','#divResult');});
+	});
+</script>
+</head>
+<body>
+	<table border='1' style='border-collapse:collapse;font-size:10px;width:100%;'>
+		<tr>
+			<td colspan='2' id='tdCtrl'>
+				<input id='btnTables' type='button' value='getTables'/>
+				<span id='spanSel'></span><input id='inputTable' type='text' /><input id='btnRows' type='button' value='getRows'/> 
+				<input id='btnSqlExecute' type='button' value='sqlExecute' />
+			</td>
+		</tr>
+		<tr>
+			<td id='tdEdit' width='60%'></td>
+			<td rowspan='2'><div id='divSuccess' style='width:100%;height:100%'></div></td>
+		</tr>
+		<tr>
+			<td valign='top' style='padding:0px'>
+				<div id='divResult' style='overflow:auto'></div>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>

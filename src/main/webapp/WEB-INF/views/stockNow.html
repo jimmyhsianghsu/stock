@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>StockNow</title>
+	<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+	<link rel="stylesheet" type="text/css" href="jquery/themes/default/easyui.css">
+	<link rel="stylesheet" type="text/css" href="jquery/themes/icon.css">
+	<script type="text/javascript" src="jquery/jquery.min.js"></script>
+	<script type="text/javascript" src="jquery/jquery.easyui.min.js"></script>
+<!--<script type="text/javascript" src="http://code.jquery.com/jquery-2.1.3.min.js"></script>-->
+	<script type="text/javascript" src="js/stockChart.js"></script>
+<script>
+function stockJobMap(div){
+	var times = [];
+	var thiz = this;
+	var get = function(){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'getStockJobMapJson'},
+			dataType:'json',
+			async:true,
+			success:function(data){
+				if (data){
+					var stockJobMapRows = data.stockJobMapRows;
+					if (stockJobMapRows && stockJobMapRows.length > 0){
+						var reg=new RegExp('[\\[\\] ]','g'); // /[\[\] ]/g
+						var rows=[];
+						var styler=function(value,row,index){if(value)return value.split(reg)[1]*1== 0||value=='true'?'background-color:#ffee00;color:red;':'';}
+						var columns=[[{field:'symbol',title:'symbol'},{field:'mark',title:'mark',styler:styler}]];
+						var list = stockJobMapRows[0].list.replace(reg,'').split(',');
+						for (var i=0;i<list.length;i++)columns[0].push({field:list[i],title:list[i],styler:styler});
+						for (var i in stockJobMapRows)rows.push(stockJobMapRows[i]);
+						$('<table></table>').appendTo($(div).empty().width($(window).width()*0.98).append(toolbar())).datagrid()
+							.datagrid({title:data.runCeasableList,columns:columns,fitColumns:false})
+							.datagrid({onSelect:function(index,row){resetStatus(row.symbol);},toolbar:'.stockJobMapBar'})
+							.datagrid('loadData',{total:rows.length,rows:rows});
+					}
+					else $(div).empty();
+				}
+				$('<span style="font-size:12px;color:blue">'+formatDate(new Date())+'</span>').appendTo($(div));
+			},
+			error:function(){
+				$('<br/><span style="font-size:12px;color:red">'+formatDate(new Date())+' failed!</span>').appendTo($(div));
+				thiz.stop();
+			}
+		});
+	}
+	this.polling = function(t){
+		thiz.stop();
+		if(t && !isNaN(t))times.push(setInterval(get,t));else get();
+		return thiz;
+	}
+	this.stop=function(){while(times.length>0)clearInterval(times.splice(0,1));}
+	function formatDate(date){
+		var year=date.getFullYear(),month=date.getMonth()+1,day=date.getDate(),hour=date.getHours(),min=date.getMinutes(),sec=date.getSeconds();
+		return year+'/'+(month<10?'0':'')+month+'/'+(day<10?'0':'')+day+' '+(hour<10?'0':'')+hour+':'+(min<10?'0':'')+min+':'+(sec<10?'0':'')+sec;
+	}
+	function resetStatus(symbol){$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:symbol},beforeSend:function(){console.log(symbol);}});}
+	function toolbar(){
+		return $("<div class='stockJobMapBar'></div>").append(
+			$("<input type='text' size='6'/>").on("keypress",function(event){if(event.keyCode==13)resetStatus(this.value);})).append(
+				$("<input type='text' size='3'/>").on("keypress",function(event){
+					var failLimit=this.value;if(event.keyCode==13)
+					$.ajax('query',{method:'GET',data:{action:'resetFailLimit',failLimit:failLimit},beforeSend:function(){console.log(failLimit);}});
+				})
+			).append($("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13)thiz.polling(this.value*1000);})
+			).append(
+				$('<a href="javascript:void(0)" plain="true"/>').linkbutton({iconCls:'icon-ok'}).click(function(){
+					thiz.polling(0);
+					$('<br/><span style="font-size:12px;color:red">'+formatDate(new Date())+' ok!</span>').appendTo($(div));
+				})
+			);
+	}
+}
+function stockJobMapButton(bdiv,div){
+	var obj;
+	this.show=function(){
+		$(bdiv).append($('<button/>').html('stockJobMapButton').click(
+			function(){
+				if(obj){
+					obj=obj.stop();
+					$(div).empty().width(0);
+				}else obj=new stockJobMap(div).polling(0);
+			}
+		));
+	}
+}
+$(function(){
+	new secret('carboboop');
+	new stockTableButton('.displayArray','.stockNewsDiv').show();
+	$('.stockNewsDiv').hide();
+	new stockRecordButton('.displayArray','.stockRecordDiv').show();
+	$('.stockRecordDiv').hide();
+});
+var secret=function(key){
+	var n=0,flag=false;
+	$(window).on("keypress",function(event){
+		if(event.keyCode==key.charCodeAt(n))n++;else n=0;
+		if(n==key.length)action();
+	});
+	var selector='.buttonArray,.buttonForm,.testForm,.stockJobMapDiv,.stockStatusDiv,.stockMapDiv,.stockNowsDiv,.stockCanvasDiv';
+	$(selector).hide();
+	function action(){
+		$(selector).toggle();
+		if(flag)return;
+		flag=true;
+		new stockJobMapButton('.buttonArray','.stockJobMapDiv').show();
+		new stockStatusBySymbolButton('.buttonArray','.stockStatusDiv').show();
+		new stockMapButton('.buttonArray','.stockMapDiv').show();
+		new stockNowsButton('.buttonArray','.stockNowsDiv').show();
+		new stockCanvasButton('.buttonArray','.stockCanvasDiv').show();
+		new stockTableButton('.buttonArray','.stockNewsDiv').show();
+		$('<form></form>').submit(function(){return false;}).append($('<input type="text" name="symbol" size="3"/>')).append(
+			$('<input type="button" value="updateStockInfoBySymbol"/>').click(function(){
+				window.open('query?action='+this.value+'&symbol='+this.form.symbol.value);
+			})
+		).append($('<input type="button" value="saveStockInfoAll"/>').click(function(){window.open('query?action='+this.value);}))
+		.append($('<input type="button" value="getStockInfoAllHtml"/>').click(function(){window.open('query?action='+this.value);}))
+		.append($('<input type="button" value="StockTable"/>').click(function(){window.open('http://www.emega.com.tw/js/StockTable.htm');}))
+		.appendTo('.buttonForm');
+		$('<form></form>').submit(function(){return false;}).append($('<input type="text" name="symbol" size="3"/>'))
+		.append($('<input type="text" name="exCh" size="3"/>')).append(
+			$('<input type="button" value="getStockInfo"/>').click(function(){
+				var date=new Date(),month=date.getMonth()+1,day=date.getDate();
+				var dateStr=date.getFullYear().toString()+(month<10?'0'+month:month)+(day<10?'0'+day:day);
+				window.open('http://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch='+this.form.exCh.value+'_'+this.form.symbol.value+
+						'.tw_'+dateStr+'&json=1&delay=0'+'&_='+date.getTime());
+			})
+		).appendTo('.buttonForm');
+		$('<form onsubmit="return false;"><input type="text" name="symbol"/><input type="button" value="alertSymbol" onclick="alert(symbol.value);"/></form>')
+		.appendTo('.testForm');
+		$('<button></button>').html('test').click(
+			function(){
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'2317'}});
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'2408'}});
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'2885'}});
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'3014'}});
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'2324'}});
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'2002'}});
+				$.ajax('query',{method:'GET',data:{action:'resetStatus',symbol:'2305'}});
+			}).appendTo('.testForm');
+		$('<button></button>').html('toggle').click(function(){$(selector).toggle();}).appendTo('.testForm');
+		$('<form></form>').submit(function(){return false;})
+			.append($('<button></button>').html('createTable').click(function(){window.open('query?action='+$(this).html());}))
+			.append($('<button></button>').html('getAll').click(function(){window.open('query?action='+$(this).html());}))
+			.append($('<button></button>').html('getStockInfoAll').click(function(){window.open('query?action='+$(this).html());}))
+			.append($('<input type="text" name="symbol" size="3"/>'))
+			.append($('<input type="text" name="yearMonth" size="3"/>'))
+			.append($('<button></button>').html('getStockBySymbolMonth').click(function(){
+				window.open('query?action='+$(this).html()+'&symbol='+this.form.symbol.value+'&yearMonth='+this.form.yearMonth.value);
+			}))
+			.append($('<button></button>').html('fromUrl').click(function(){
+				window.open('query?action='+$(this).html()+'&symbol='+this.form.symbol.value+'&yearMonth='+this.form.yearMonth.value);
+			}))
+			.append($('<button></button>').html('fromDb').click(function(){
+				window.open('query?action='+$(this).html()+'&symbol='+this.form.symbol.value+'&yearMonth='+this.form.yearMonth.value);
+			}))
+			.append($('<button></button>').html('getStockJobMap').click(function(){
+				window.open('query?action='+$(this).html()+'&symbol='+this.form.symbol.value+'&yearMonth='+this.form.yearMonth.value);
+			}))
+		.appendTo('.testForm');
+	}
+};
+function stockStatusBySymbol(div){
+	var $dg;
+	(function(div){
+		var columns=[[{field:'symbol',title:'symbol'},{field:'yearMonth',title:'yearMonth'},{field:'status',title:'status'},{field:'dateDay',title:'dateDay'}]];
+		$dg=$('<table></table>').appendTo($(div).empty().width($(window).width()*0.5).append(toolbar())).datagrid()
+			.datagrid({title:'stockStatusBySymbol',columns:columns,fitColumns:false})
+			.datagrid({toolbar:'.stockStatusBar'});
+	})(div);
+	function get(symbol){$dg.datagrid({url:'query',method:'GET',queryParams:{action:'getStockStatusBySymbolJson',symbol:symbol}});}
+	function reload(){$dg.datagrid('reload');}
+	function toolbar(){
+		return $("<div class='stockStatusBar'></div>").append(
+			$("<input type='text' size='6'/>").on("keypress",function(event){if(event.keyCode==13)get(this.value);})).append(
+				$('<a href="javascript:void(0)" plain="true"/>').linkbutton({iconCls:'icon-reload'}).click(reload));
+	}
+}
+function stockStatusBySymbolButton(bdiv,div){
+	var obj;
+	this.show=function(){
+		$(bdiv).append($('<button/>').html('stockStatusBySymbolButton').click(
+			function(){
+				if(obj){
+					obj=null;
+					$(div).empty().width(0);
+				}else obj=new stockStatusBySymbol(div);
+			}
+		));
+	}
+}
+function stockNows(div){
+	var times = [];
+	var thiz = this;
+	var symbols = [];
+	var t0=0;
+	var get = function(){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'getStockNows',symbols:symbols},
+			dataType:'json',
+			async:true,
+			success:function(data){
+				if (data){
+					var columns=[[
+						{field:'c',title:'代號'},
+						{field:'n',title:'名稱'},
+						{field:'z',title:'成交價'},
+						{field:'delta',title:'漲跌',formatter:function(value,row,index){return delta(row);}},
+						{field:'change',title:'漲跌%',formatter:function(value,row,index){return change(row) + ' %';},align:'right'},
+						{field:'y',title:'昨收'},
+						{field:'d',title:'時間',formatter:function(value,row,index){return row.t + '&nbsp;&nbsp;' + row.d;}}
+					]];
+					var rowStyler=function(index,row){return delta(row)>0?"background-color:#ff3333;color:#fff;":delta(row)<0?"background-color:#62ffBB;color:#000;":'';}
+					$('<table></table>').appendTo($(div).empty().width($(window).width()*0.5).append(toolbar())).datagrid()
+						.datagrid({title:'getStockNows',columns:columns,fitColumns:false,rowStyler:rowStyler,toolbar:'.stockNowBar'})
+						.datagrid('loadData',data);
+				}
+				else $(div).empty();
+				$('<span style="font-size:12px;color:blue">'+new Date()+'</span>').appendTo($(div));
+				if(data && globalStockService){
+					for(var i=0;i<data.rows.length;i++){
+						var stock={
+							symbol:data.rows[i].c,
+							dateDay:rocDate(data.rows[i].d),
+							open:data.rows[i].o,
+							high:data.rows[i].h,
+							low:data.rows[i].l,
+							close:data.rows[i].z,
+							volume:data.rows[i].v+',000',
+							turnover:0,
+							change:delta(data.rows[i]),
+							count:0
+						};
+						globalStockService.updating(stock);
+					}
+				}
+			},
+			error:function(){
+				$('<br/><span style="font-size:12px;color:red">'+new Date()+' failed!</span>').appendTo($(div));
+				thiz.stop();
+			}
+		});
+		function rocDate(adDate){
+			var year=adDate.toString().substring(0,4),date=adDate.toString().substring(4,8);
+			return dig3((year*1-1911)).toString()+date;
+		}
+		function toolbar(){
+			return $("<div class='stockNowBar'></div>").append(
+				$("<input type='text' size='6'/>").on("keypress",function(event){if(event.keyCode==13)thiz.addSymbol(this.value);}))
+			.append(
+				$("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13)thiz.polling(this.value*1000);})
+			).append(
+				$('<a href="javascript:void(0)" plain="true"/>').linkbutton({iconCls:'icon-ok'}).click(function(){
+					thiz.polling(0);
+					$('<br/><span style="font-size:12px;color:red">'+new Date()+' ok!</span>').appendTo($(div));
+				})
+			);
+		}
+	}
+	this.addSymbol = function(symbol){
+		symbol=symbol*1;
+		var exist = false;
+		for(var i=0;i<symbols.length;i++)if(symbols[i]==symbol)exist=true;
+		if(!exist)symbols.push(symbol);
+		this.polling(t0);
+	};
+	this.getStockNow = function(){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'getStockNows',symbols:symbols},
+			dataType:'json',
+			async:true,
+			success:function(data){
+				if (data){
+					for (var i in data.rows){
+						var change = Math.round((data.rows[i].z-data.rows[i].y)/data.rows[i].y*10000)/100;
+						console.log(data.rows[i].c + ':' + data.rows[i].n + '=' + data.rows[i].z + ' (' + change + ')');
+					}
+				}
+				console.log('success!');
+			},
+			error:function(){console.log('failed!');}
+		});
+	}
+	this.polling = function(t){
+		thiz.stop();
+		if(t && !isNaN(t))times.push(setInterval(get,t));else get();
+		t0=t;
+	}
+	this.stop=function(){while(times.length>0)clearInterval(times.splice(0,1));}
+	function delta(row){return Math.round((row.z-row.y)*100)/100;}
+	function change(row){return Math.round((row.z-row.y)/row.y*10000)/100;}
+}
+function stockNowsButton(bdiv,div){
+	var obj,symbol;
+	this.show=function(){
+		$(bdiv).append($("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13){symbol=this.value;}}))
+			.append($('<button/>').html('stockNowsButton').click(
+				function(){
+					if(obj){
+						obj=obj.stop();
+						$(div).empty().width(0);
+					}else{
+						obj=new stockNows(div);
+						if(symbol && !isNaN(symbol))obj.addSymbol(symbol);
+					}
+				}
+		));
+	}
+}
+var globalStockService;
+var globalStockTableButton;
+function stockService(){
+	var stockMap={};
+	function update(symbol, yearMonth){
+		console.log('update:'+symbol+'='+yearMonth);
+		yearMonth=rightYearMonth(yearMonth);
+		var data=JSON.parse($.ajax('query',{
+			method:'GET',
+			data:{action:'getStockBySymbolMonthJson',symbol:symbol,yearMonth:yearMonth},
+			async:false
+		}).responseText);
+		if(data && data.status && data.status*1>0){
+			for(var i=0;i<data.rows.length;i++){
+				var stock=data.rows[i];
+				symbol=dig4(symbol);
+				stock.symbol=dig4(stock.symbol);
+				if(symbol*1==stock.symbol*1 && checkYearMonth(yearMonth,stock.dateDay)){ // check-1
+					if(!stockMap[stock.symbol]){
+						stockMap[stock.symbol]={};
+					}
+					if(!stockMap[stock.symbol][yearMonth]){
+						stockMap[stock.symbol][yearMonth]={};
+					}
+					if(!stockMap[stock.symbol][yearMonth].last){
+						stockMap[stock.symbol][yearMonth].last=stock;
+					}
+					var o=stockMap[stock.symbol][yearMonth];
+					var e=o.last;
+					if(stock.dateDay*1>e.dateDay*1){
+						o.last=stock;
+						stock.prev=e;
+					}else if(stock.dateDay*1==e.dateDay*1){
+						o.last=stock;
+						stock.prev=e.prev;
+					}else{
+						while(true){
+							if(e.prev){
+								if(stock.dateDay*1>e.prev.dateDay*1){
+									stock.prev=e.prev;
+									e.prev=stock;
+									break;
+								}else if(stock.dateDay*1==e.prev.dateDay*1){
+									stock.prev=e.prev.prev;
+									e.prev=stock;
+									break;
+								}
+								e=e.prev;
+							}else{
+								e.prev=stock;
+								break;
+							}
+						}
+					}
+					console.log('i='+stock.dateDay);
+				}
+			}
+			stockMap[symbol][yearMonth].status=data.status; // check-2
+			if(getPrev(symbol,yearMonth*1+1))getPrev(symbol,yearMonth*1+1).prev=getLast(symbol,yearMonth);
+			getPrev(symbol,yearMonth).prev=getLast(symbol,yearMonth*1-1);
+			var p=stockMap[symbol][yearMonth].last;do{console.log(yearMonth+'='+p.dateDay);}while((p=p.prev))
+			return data.status;
+		}
+		return 0;
+	}
+	this.updating=function(stock){
+		if(stock){
+			var symbol=stock.symbol,yearMonth=adYearMonth(stock.dateDay);
+			if(stockMap[symbol] && stockMap[symbol][yearMonth]){
+				var o=stockMap[stock.symbol][yearMonth];
+				var e=o.last;
+				if(stock.dateDay*1>e.dateDay*1){
+					o.last=stock;
+					stock.prev=e;
+				}else if(stock.dateDay*1==e.dateDay*1){
+					o.last=stock;
+					stock.prev=e.prev;
+				}else{
+					while(true){
+						if(e.prev){
+							if(stock.dateDay*1>e.prev.dateDay*1){
+								stock.prev=e.prev;
+								e.prev=stock;
+								break;
+							}else if(stock.dateDay*1==e.prev.dateDay*1){
+								stock.prev=e.prev.prev;
+								e.prev=stock;
+								break;
+							}
+							e=e.prev;
+						}else{
+							e.prev=stock;
+							break;
+						}
+					}
+				}
+			}
+			else if(!stockMap[symbol]){
+				stockMap[symbol]={};
+				stockMap[symbol][yearMonth]={last:stock};
+			}else if(!stockMap[symbol][yearMonth])stockMap[symbol][yearMonth]={last:stock};
+			// service.updating.draw
+			// flag1.showMark.float.timeout
+		}
+	}
+	this.update=function(stock,stockNo,flag){ // (stock,stockNo,flag)
+		var count=0;
+		var yearMonth;
+		if (flag==1){
+			yearMonth=rightYearMonth(adYearMonth(stock[stock.length-1].dateDay)*1+flag*1);
+		// vep=volume.exception.picture.m20
+		}else if(flag==-1)yearMonth=rightYearMonth(adYearMonth(stock[0].dateDay)*1+flag*1);
+		var data=JSON.parse($.ajax('query',{method:'GET',data:{action:'getStockBySymbolMonthJson',symbol:stockNo,yearMonth:yearMonth},async:false}).responseText);
+		if(data){
+			console.log('#',data.rows[0].dateDay+'~'+data.rows[data.rows.length-1].dateDay+'='+data.rows.length);
+			var i=stock.length-1;
+			for(var i1=data.rows.length-1;i1>=0;i1--){
+				while(i>=0)
+					if(data.rows[i1].dateDay*1>stock[i].dateDay*1){
+						stock.splice(i+1,0,data.rows[i1]);
+						count++;
+						break;
+					}else if(data.rows[i1].dateDay*1==stock[i].dateDay*1){
+						stock[i]=data.rows[i1];
+						i--;
+						break;
+					}else i--;
+				if(i==-1){
+					stock.splice(0,0,data.rows[i1]);
+					count++;
+				}
+			}
+			for(var i1 in stock)i+=','+stock[i1].dateDay;console.log('#',i+','+(i1*1+1)+','+stock[i1*1].volume);
+			return count;
+		}
+		return count;
+		if (flag==1){
+			yearMonth=rightYearMonth(adYearMonth(stock[stock.length-1].dateDay)*1+flag*1);
+			var data=JSON.parse($.ajax('query',{
+				method:'GET',
+				data:{action:'getStockNows',symbols:[stockNo]},
+				async:false
+			}).responseText);
+			if(data && data.rows && data.rows.length){
+				for(var i=0;i<data.rows.length;i++){
+					data.rows[i].c=dig4(data.rows[i].c);
+					this.updating({
+						symbol:data.rows[i].c,
+						dateDay:rocDate(data.rows[i].d),
+						open:data.rows[i].o,
+						high:data.rows[i].h,
+						low:data.rows[i].l,
+						close:data.rows[i].z,
+						volume:data.rows[i].v+',000',
+						turnover:0,
+						change:delta(data.rows[i]),
+						count:0
+					});
+				}
+			}
+		}else if(flag==-1){
+			yearMonth=rightYearMonth(adYearMonth(stock[0].dateDay)*1+flag*1);
+		}
+		for(var y=0;(flag && (flag==-1 && y<1)||(flag==1 && y<2));y++){
+			yearMonth=rightYearMonth(yearMonth*1-y);
+			if((stockMap[stockNo] && stockMap[stockNo][yearMonth])||update(stockNo,yearMonth)){
+				var e=stockMap[stockNo][yearMonth].last;
+				while(e){
+					var i;
+					for(i=0;i<stock.length;i++){
+						if(e.dateDay*1<stock[i].dateDay*1){
+							stock.splice(i,0,e);
+							if(flag==-1)
+							count++;
+							break;
+						}else if(e.dateDay*1==stock[i].dateDay*1){
+							stock.splice(i,1,e);
+							break;
+						}
+					}
+					if(i==stock.length){
+						stock.push(e);
+						if(flag==1)
+						count++;
+					}
+					e=e.prev;
+				}
+			}
+		}
+		for(var i=stock.length-1;i>=0;i--){
+			var o=stockMap[stockNo][adYearMonth(stock[i].dateDay)].last; // check-o
+			while(o && o.dateDay*1!=stock[i].dateDay*1)o=o.prev;
+			if(o && compute(o)){
+				stock[i].m20=o.m20;
+			}
+			else break;
+		}
+		return count;
+	}
+	function compute(o){
+		var e=o,flag=true;
+		var m20=0;
+		var bb=0,bbs=[];
+		for(var i=0;i<20;i++){
+			m20+=e.close*1;
+			bbs.push(e.close);
+			if(e.prev||update(e.symbol,adYearMonth(e.dateDay)*1-1))
+				e=e.prev;
+			else{
+				flag=false;
+				break;
+			}
+		}
+		if(flag){
+			o.m20=m20*1/20;
+			o.m20=Math.round(o.m20*1000)/1000;
+			var bs=o.low*1-o.m20*1;
+			if(Math.abs(bs)<Math.abs(o.high*1-o.m20*1))bs=o.high*1-o.m20*1;
+			o.bias=bs/o.m20*1;
+			o.bias=Math.round(o.bias*1000)/10;
+			for(var i=0;i<bbs.length;i++)bb+=Math.pow(bbs[i]-o.m20,2);
+			bb=Math.pow(bb/20,0.5);
+			o.bbh=o.m20*1+bb*2;
+			o.bbl=o.m20*1-bb*2;
+		}
+		return flag;
+	}
+	function getLast(symbol,yearMonth){
+		yearMonth=rightYearMonth(yearMonth);
+		if(stockMap[symbol] && stockMap[symbol][yearMonth])return stockMap[symbol][yearMonth].last;
+	}
+	function getPrev(symbol,yearMonth){
+		yearMonth=rightYearMonth(yearMonth);
+		if(stockMap[symbol] && stockMap[symbol][yearMonth]){
+			var e=stockMap[symbol][yearMonth].last;
+			while(e.prev && checkYearMonth(yearMonth,e.prev.dateDay))e=e.prev;
+			return e;
+		}
+	}
+	function rightYearMonth(yearMonth){
+		var year=yearMonth.toString().substring(0,4),month=yearMonth.toString().substring(4,6);
+		return month=='13'?(year*1+1).toString()+'01':month=='00'?(year*1-1).toString()+'12':yearMonth;
+	}
+	function rocYearMonth(yearMonth){
+		var year=yearMonth.toString().substring(0,4),month=yearMonth.toString().substring(4,6);
+		return dig3((year*1-1911)).toString()+month;
+	}
+	function adYearMonth(dateDay){
+		var year=dateDay.toString().substring(0,3),month=dateDay.toString().substring(3,5);
+		return (year*1+1911).toString()+month;
+	}
+	function checkYearMonth(yearMonth,dateDay){return rocYearMonth(yearMonth)*1==dateDay.substring(0,5)*1;}
+	this.get=function(symbol, yearMonth){
+		var data=JSON.parse($.ajax('query',{method:'GET',data:{action:'getStockBySymbolMonthJson',symbol:symbol,yearMonth:yearMonth},async:false}).responseText);
+		console.log('#',data.rows[0].dateDay+'~'+data.rows[data.rows.length-1].dateDay+'='+data.rows.length);
+		return data?data.rows:null;
+		var a=[]; // update-1
+		var g=1;
+		if((stockMap[symbol] && stockMap[symbol][yearMonth])||update(symbol,yearMonth)){ // update-2
+			var o=stockMap[symbol][yearMonth].last; // update-3
+			while(o && checkYearMonth(yearMonth,o.dateDay)){ // update-4
+				o.m20=0; // update-5
+				a.splice(0,0,o); // update-6
+				var e=o,m20=0,flag=true; // update-7
+				for(var i=0;i<20;i++){
+					m20+=e.close*1; // update-8
+					if(e.prev||update(symbol,adYearMonth(e.dateDay)*1-1)) // update-9
+						e=e.prev; // update-10
+					else{
+						flag=false; // update-11
+						break;
+					}
+				}
+				if(flag){
+					o.m20=m20*1/20;
+					o.m20=Math.round(o.m20*1000)/1000;
+					o=o.prev; // update-12
+				}
+			}
+		}
+		else if(g-->0)return this.get(symbol,rightYearMonth(yearMonth*1-1));
+		for(var i=a.length-1;i>=0;i--){
+			var o=stockMap[symbol][adYearMonth(a[i].dateDay)].last; // check-o
+			while(o && o.dateDay*1!=a[i].dateDay*1)o=o.prev;
+			if(o && compute(o)){
+				a[i].m20=o.m20;
+			}
+			else break;
+		}
+		return a;
+	}
+	function rocDate(adDate){
+		var year=adDate.toString().substring(0,4),date=adDate.toString().substring(4,8);
+		return dig3((year*1-1911)).toString()+date;
+	}
+	function delta(row){return Math.round((row.z-row.y)*100)/100;}
+	this.saveLevel=function(symbol,dateDay1,dateDay2){
+		var data=JSON.parse($.ajax('query',{
+			method:'GET',
+			data:{action:'saveLevel',symbol:symbol,dateDay1:dateDay1,dateDay2:dateDay2},
+			async:false
+		}).responseText);
+		if(data && data.level)return {d1:data.level.dateDay1,d2:data.level.dateDay2,l1:data.level.level1,l2:data.level.level2,l3:data.level.level3};
+	}
+	this.getInfo=function(symbol){
+		var data=JSON.parse($.ajax('query',{
+			method:'GET',
+			data:{action:'getInfo',symbol:symbol},
+			async:false
+		}).responseText);
+		if(data && data.info)data.info.symbol=dig4(data.info.symbol);
+		if(data && data.info)return {symbol:data.info.symbol,name:data.info.name,exCh:data.info.exCh,
+			d1:data.info.dateDay1,d2:data.info.dateDay2,l1:data.info.level1,l2:data.info.level2,l3:data.info.level3};
+	}
+	this.saveBsMax=function(symbol,bsMaxDateDay,bsMax){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'saveBsMax',symbol:symbol,bsMaxDateDay:bsMaxDateDay,bsMax:bsMax},
+			async:true
+		});
+	}
+		var thiz=this;
+	this.getStockNows=function(symbolStrs,client){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'getStockNows',symbols:symbolStrs.split(',')},
+			dataType:'json',
+			async:true,
+			success:function(data){
+				if(data && data.rows && data.rows.length){
+					for(var i=0;i<data.rows.length;i++){
+						data.rows[i].c=dig4(data.rows[i].c);
+						var stock={
+							symbol:data.rows[i].symbol,
+							dateDay:rocDate(data.rows[i].dateDay),
+							open:data.rows[i].open,
+							high:data.rows[i].high,
+							low:data.rows[i].low,
+							close:data.rows[i].close,
+							volume:data.rows[i].volume,
+							turnover:data.rows[i].turnover,
+							change:data.rows[i].change,
+							counts:data.rows[i].counts
+							,exCh:data.rows[i].exCh
+							,name:data.rows[i].name
+							,time:data.rows[i].time
+							,yes:data.rows[i].yes,changey:data.rows[i].changey
+							,level1:data.rows[i].level1,level2:data.rows[i].level2,level3:data.rows[i].level3
+							,bsMaxDateDay:data.rows[i].bsMaxDateDay,bsMax:data.rows[i].bsMax
+							,u:data.rows[i].upLimit,w:data.rows[i].downLimit
+							,m20:data.rows[i].m20,bbh:data.rows[i].bbh,bbl:data.rows[i].bbl,bias:data.rows[i].bias
+						};
+						console.log('#',stock);
+						if(stock && client && client.refresh)client.refresh(stock);
+					}
+					return;
+				}
+				if(data && data.rows && data.rows.length){
+					for(var i=0;i<data.rows.length;i++){
+						data.rows[i].c=dig4(data.rows[i].c);
+						var stock={
+							symbol:data.rows[i].c,
+							dateDay:rocDate(data.rows[i].d),
+							open:data.rows[i].o,
+							high:data.rows[i].h,
+							low:data.rows[i].l,
+							close:data.rows[i].z,
+							volume:data.rows[i].v+',000',
+							turnover:0,
+							change:delta(data.rows[i]),
+							count:0
+							,exCh:data.rows[i].exCh
+							,name:data.rows[i].n
+							,time:data.rows[i].t
+							,yes:data.rows[i].y,changey:Math.round((data.rows[i].z-data.rows[i].y)/data.rows[i].y*10000)/100
+							,level1:data.rows[i].level1,level2:data.rows[i].level2,level3:data.rows[i].level3
+							,bsMaxDateDay:data.rows[i].bsMaxDateDay,bsMax:data.rows[i].bsMax
+							,u:data.rows[i].u,w:data.rows[i].w
+						};
+						if(stock && (stock.exCh=='tse'||stock.exCh=='otc')){
+							console.log(stock=thiz.getStockNow(stock));
+							if(stock && client && client.refresh)client.refresh(stock);
+						}
+					}
+				}
+			},
+			error:function(){console.log('failed!');}
+		});
+	}
+	this.getStockNow=function(stock){
+		var symbol=stock.symbol,yearMonth=adYearMonth(stock.dateDay);
+		if((stockMap[symbol] && stockMap[symbol][yearMonth] && stockMap[symbol][yearMonth].status)||(update(stock.symbol,adYearMonth(stock.dateDay))||update(symbol,yearMonth-1))){
+			this.updating(stock);
+			var array=this.get(stock.symbol,adYearMonth(stock.dateDay));
+			//for(var i=0;array && array.length && i<array.length;i++)
+			if(array && array.length)for(var i=array.length-1;i>=0;i--)
+				if(array[i].dateDay*1==stock.dateDay*1)return array[i];
+		}
+	}
+}
+
+function stockMap(div){
+	var $dg,service=new stockService(),symbol,yearMonth;
+	if(div)
+	(function(div){
+		var columns=[[{field:'symbol',title:'symbol'},{field:'dateDay',title:'dateDay'},
+			{field:'open',title:'open'},{field:'high',title:'high'},{field:'low',title:'low'},{field:'close',title:'close'},
+			{field:'volume',title:'volume'},{field:'turnover',title:'turnover'},{field:'change',title:'change'},{field:'count',title:'count'},
+			{field:'m20',title:'m20'}]];
+		$dg=$('<table></table>').appendTo($(div).empty().width($(window).width()*0.5).append(toolbar())).datagrid()
+			.datagrid({title:'stockMap',columns:columns,fitColumns:false})
+			.datagrid({toolbar:'.stockMapBar'});
+	})(div);
+	function get(symbol,yearMonth){
+		var rows=service.get(symbol,yearMonth);
+		if(rows)$dg.datagrid('loadData',{total:rows.length,rows:rows});
+	}
+	function toolbar(){
+		return $("<div class='stockMapBar'></div>").append(
+			$("<input type='text' size='6'/>").on("keypress",function(event){if(event.keyCode==13){symbol=this.value;}})).append(
+				$("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13){yearMonth=this.value;get(symbol,yearMonth);}}))
+			.append($('<a href="javascript:void(0)" plain="true"/>').linkbutton({iconCls:'icon-ok'}).click(function(){get(symbol,yearMonth);}));
+	}
+	this.updating=service.updating;
+	this.get=service.get; // globalStockService-3
+	this.update=service.update;
+	this.saveLevel=service.saveLevel; // saveLevel.getInfo
+	this.getInfo=service.getInfo;
+	this.saveBsMax=service.saveBsMax;
+	this.getStockNows=service.getStockNows;
+}
+function stockMapButton(bdiv,div){
+	var obj;
+	this.show=function(){
+		$(bdiv).append($('<button/>').html('stockMapButton').click(
+			function(){
+				if(obj){
+					obj=null;
+					$(div).empty().width(0);
+				}else obj=new stockMap(div);
+				globalStockService=obj;
+			}
+		));
+	}
+}
+function stockCanvas(div,symbol,stockService){
+	var info;this.setInfo=function(_info){info=_info;};
+	var chart,array,end,period;
+	var $ctrl,$mark;
+	var tShow=0;
+	var asyncTime,asyncLimit;
+	var $extra;
+	this.showMark=function(stock,draw,extra){
+		if(stock){
+			$mark.html(stock.d+','+stock.o+','+stock.h+','+stock.l+','+stock.y+'='+stock.bs);
+			$mark.html($mark.html()+'['+stock.m20+']');
+			$mark.html(stock.d);
+			$mark.html('&nbsp;&nbsp;'+info.name+'-'+stock.d);
+			var _array=[['開盤',stock.o,'月均',stock.m20,'關卡1',stock.level1],
+				['最高',stock.h,'乖離',stock.bs+' %','關卡2',stock.level2],
+				['最低',stock.l,'上限',Math.round(stock.bbh*100)/100,'關卡3',stock.level3],
+				['收盤',stock.y,'下限',Math.round(stock.bbl*100)/100,'-','-']];
+			_array[0][3]=Math.round(_array[0][3]*100)/100;
+			var $tab=$("<table border='1' cellpadding='5' style='border-collapse:collapse;font-size:10px;text-align:right'></table");
+			$.each(_array,function(i,e){
+				$tab.append($('<tr></tr>').append($('<td></td>').html(e[0])).append($('<td></td>').html(e[1]))
+					.append($('<td></td>').html(e[2])).append($('<td></td>').html(e[3])))
+			});
+			$mark.append($tab);
+			$mark.append('&nbsp;&nbsp;'+info.symbol+'-'+info.name+'['+info.close+']');
+		}
+		if(draw){
+			$ctrl.find('span').html('['+draw[0]+','+draw[1]+']['+draw[2]+','+draw[3]+','+draw[4]+']');
+			if(typeof(end)=='undefined' || typeof(period)=='undefined'){
+				end=draw[0];
+				period=draw[1];
+			}
+			if(++tShow<12 && !(end*1==draw[0]*1 && period*1==draw[1]*1) && period*1!=draw[1]*1){ // -6535(front-back)
+				chart.draw(array,end,period);
+			}else{
+				$ctrl.find('input').eq(0).val((end=draw[0]));
+				$ctrl.find('input').eq(1).val((period=draw[1]));
+				tShow=0;
+			}
+		}
+		if(extra){
+			var level,levels=[info.level1,info.level2,info.level3],deg,degs=[0.382,0.5,0.618],d=1000;
+			for(var i in levels){
+				var ds=Math.abs(extra-levels[i]);
+				if(ds<d){d=ds;level=Math.round(levels[i]*100)/100;deg=degs[i];}
+			}
+			var price1=Math.round(level*103)/100,price2=Math.round(level*97)/100;
+			extra=Math.round(extra*100)/100;
+			$extra.empty().append(extraTab([extra,info.dateDay+'_'+info.symbol+info.name+'_'+deg+' = '+level+' ('+price1+' ~ '+price2+')']));
+		}
+		function extraTab(extra){
+			var $tab=$("<table border='1' cellpadding='5' style='border-collapse:collapse;font-size:10px;text-align:right'></table>");
+			var $tr=$('<tr></tr>').appendTo($tab);
+			for(var i in extra)$tr.append($('<td></td>').html(extra[i]));
+			return $tab;
+		}
+	};
+	if(stockService){
+		chart=new stockChart($('<div style="width:500px;height:400px;float:left"></div>').appendTo($(div)).get(0));
+		chart.setStockUpdate(this); // chart-1
+		chart.setShowMark(this.showMark); // chart-2
+		chart.setStockNo(symbol); // chart-3
+		array=chartArray(stockService.get(symbol,currentYearMonth())); // stockService.get
+		if(!array || !array.length)array=[];
+		$ctrl=$('<div style="float:left"></div>');
+		$mark=$('<div style="float:left"></div>');
+		$ctrl.append(
+			$("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13){end=this.value;}})
+			.blur(function(){end=this.value;})
+		).append(
+			$("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13){period=this.value;}})
+			.blur(function(){period=this.value;})
+		).append(
+			$('<button/>').html('stockMapButton').click(function(){chart.draw(array,end,period)})
+		).append($('<button/>').html('+30').click(function(){period=period*1+$(this).html()*1;chart.draw(array,end,period);})
+		).append($('<button/>').html('-30').click(function(){period=period*1+$(this).html()*1;period=period<1?1:period;chart.draw(array,end,period);})
+		).append('<br/>'
+		).append(
+			$('<input type="checkbox"/>').click(function(){chart.drawOption(this.checked,null,null);})
+		).append('<b>m20</b>'
+		).append(
+			$('<input type="checkbox"/>').click(function(){chart.drawOption(null,this.checked,null);})
+		).append('<b>bb</b>'
+		).append(
+			$('<input type="checkbox"/>').click(function(){chart.drawOption(null,null,null,this.checked);})
+		).append('<b>rect</b>'
+		).append(
+			$('<input type="checkbox"/>').click(function(){chart.drawOption(null,null,this.checked);})
+		).append('<b>level</b>'
+		).append(
+				$('<button/>').html('level').click(function(){chart.saveLevel(symbol,end,period);})
+		).append('<br/>').append(
+				$('<button/>').html('drawRect').click(function(){chart.drawRect();})
+		).append('<span></span>');
+		$extra=$('<div style="float:left"></div>');
+		$(div).append($mark).append('<br/>').append($ctrl).append($extra).append($('<div style="clear:left"></div>'));
+		chart.setLevel(stockService.getInfo(symbol)); // stockService.getInfo
+// 		chart.draw(array,0,array.length); // chart-4.
+		asyncRun(12);
+	}
+	// 4=setStockUpdate.setShowMark.setStockNo.draw
+	// 2=update.showMark
+	// 3=get.update.updating
+	// ppt:3=saveLevel.getInfo.setLevel
+	this.update=update;
+	function update(stock,stockNo,flag){ // (stock,stockNo,flag)
+		var _array=stockArray(stock);
+		var count=stockService.update(_array,stockNo,flag); // stockService.update // stockService.updating
+		_array=chartArray(_array);
+		stock.splice(0,stock.length);
+		for(var i=0;i<_array.length;i++)stock.push(_array[i]);
+		return count;
+	}
+	this.saveLevel=stockService.saveLevel; // stockService.saveLevel
+	this.saveLevel=function(_stockNo,_end,_period){
+		var level=stockService.saveLevel(_stockNo,_end,_period);
+		if(globalStockTableButton)globalStockTableButton.addSymbol([_stockNo]);
+		info.level1=level.l1;info.level2=level.l2;info.level3=level.l3;
+		return level;
+	}
+	this.setEndPeriod=function(_end,_period){chart.draw(array,end=_end,period=_period);}
+	function asyncRun(_asyncLimit){
+		if(_asyncLimit){asyncLimit=_asyncLimit;asyncTime=0;setTimeout(function(){asyncTime=asyncLimit*10;},asyncLimit*1000/2*2)}
+		if(asyncLimit && ++asyncTime<asyncLimit){
+			if(asyncTime==2)chart.draw(array,0,array.length);
+			if(update(array,symbol,-1));else asyncTime=asyncLimit*10;console.log('asyncTime='+asyncTime);
+			setTimeout(asyncRun,100);
+		}else{
+			var bhi=0;bhid=0;
+			for(var i=0;i<array.length;i++)
+				if(Math.abs(array[i].bs*1)>bhi*1){
+					bhi=Math.abs(array[i].bs);
+					bhid=array[i].d;
+				}
+			$ctrl.append('<br/>').append(
+				$('<button/>').html(bhi+'('+bhid+')').click(function(){stockService.saveBsMax(symbol,bhid,bhi);}) // stockService.saveBsMax
+				.click()
+			);
+			if(globalStockTableButton)globalStockTableButton.addSymbol([symbol]);
+		};
+	}
+	function currentYearMonth(){
+		var date=new Date();
+		var month=date.getMonth()*1+1;
+		return (date.getFullYear().toString()+(month<10?'0'+month:month))*1;
+	}
+	function chartArray(array){
+		if(array && array.length){
+			var tran=[];
+			for(var i=0;i<array.length;i++)tran.push({
+				d:array[i].dateDay,o:array[i].open,h:array[i].high,l:array[i].low,y:array[i].close
+				,m20:array[i].m20
+				,v:array[i].volume.replace(',','')
+				,bs:array[i].bias,bbh:array[i].bbh,bbl:array[i].bbl
+			});
+			return tran;
+		}
+	}
+	function stockArray(array){
+		if(array && array.length){
+			var tran=[];
+			for(var i=0;i<array.length;i++)tran.push({
+				dateDay:array[i].d,open:array[i].o,high:array[i].h,low:array[i].l,close:array[i].y
+				,volume:array[i].v
+				,bias:array[i].bs,bbh:array[i].bbh,bbl:array[i].bbl
+				,m20:array[i].m20
+			});
+			return tran;
+		}
+	}
+}
+function stockCanvasButton(bdiv,div){
+	var symbol,canvas=[];
+	this.show=function(){
+		$(bdiv).append($("<input type='text' size='3'/>").on("keypress",function(event){if(event.keyCode==13){symbol=this.value;}}))
+			.append($('<button/>').html('stockCanvasButton').click(
+				function(){
+					$(div).width($(window).width()*0.9);
+					if(globalStockService)canvas.push(new stockCanvas(div,symbol,globalStockService));
+				}
+		));
+	}
+}
+var test=new stockService();test.getStockNows('6415');test.getStockNows('6415');test.getStockNows('6415');
+test.getStockNows('2640');
+function stockTableButton(bdiv,div){
+	var service=new stockMap(),thiz=this,symbols={},tab;
+	var text,index=0;
+	var timer,times,time;
+	var $timebox=$("<input type='text' size='2'/>").blur(function(){timing(this.value);}).mousedown(function(){timing(0);});
+	function timing(_time){
+		if(timer)clearTimeout(timer);
+		$timebox.val(isNaN(_time)?time:_time);
+		if(!isNaN(_time))time=times=_time;
+		if(times==0)return;
+		if(time--<=0){
+			addSymbol();
+			time=times;
+		}
+		timer=setTimeout(timing,1000);
+	}
+	globalStockTableButton=thiz;
+	this.show=function(){
+		$(bdiv).append($('<button/>').html('stockTableButton').click(function(){
+			symbols={};
+			$(div).show();
+			$(div).width($(window).width()*0.9).empty().append(
+				$('<button/>').html('T50').click(function(){getGroup($(this).html());})
+			).append(
+				$('<input type="button" value="中型100"/>').click(function(){getGroup('T100');})
+			).append(
+				$('<button/>').html('成交量Top20').click(function(){getGroup('topV20');})
+			).append(
+				$("<input type='text' size='3'/>").blur(function(){text=this.value;})
+			).append(
+				$('<button/>').html('getGroup').click(function(){addSymbol([text]);})
+			).append(
+				new timebox(addSymbol)
+			).append(
+				fGroup.getSel().val('')
+			).append(
+				$('<button/>').html('delGroup').click(function(){
+					var group=fGroup.getSel().find(':selected').val();
+					if(group && group.trim()!='')removeGroup(group);
+				})
+			).append(
+				$('<input type="checkbox"/>').click(function(){
+					$.ajax('query',{method:'GET',dataType:'json',
+						data:{action:'getComputeMapJson',extend:$(this).prop('checked')?'start':'stop'},
+						success:function(data){console.log(data.extend,data.computeMap);},error:function(){console.log('failed!');}
+					});
+				})
+			).append(
+				$("<table border='1' style='border-collapse:collapse' width='100%'>")
+				.append('<tr><td>序號</td><td>功能</td><td>代碼</td><td>名稱</td><td>昨收</td><td>開盤</td><td>最高</td><td>最低</td><td>收盤</td><td>漲跌</td>'+
+					'<td>布林軌道</td><td>乖離</td><td>月均</td><td>level1</td><td>level2</td><td>level3</td><td>時間</td><td>最大乖離</td></tr>')
+			);
+			tab=$(div).children('table').get(0);
+			$(tab).css('font-size','10px');
+		}));
+	}
+	var fGroup=new function(){
+		var $sel=$('<select></select>');
+		this.getSel=function(){return $sel.unbind().change(change);};
+		this.getGroups=function(){
+			$.ajax('query',{
+				method:'GET',
+				data:{action:'getGroup'},
+				dataType:'json',
+				async:true,
+				success:function(data){
+					$sel.empty().append($('<option></option>').attr('value','').text(''));
+					if(data && data.length)for(var i=0;i<data.length;i++)$sel.append($('<option></option>').attr('value',data[i]).text(data[i]));
+				},error:function(){console.log('failed!');}
+			});
+		}
+		var change;
+		$sel.change(change=function(){
+			var group=$(this).find(':selected').val();
+			if(group && group.trim()!='')getGroup(group);
+			else console.log('group='+group);
+		});
+		this.getOptions=function(){var a=[];$sel.find('option').each(function(i){a.push($(this).val());});return a;}
+		this.getGroups();
+	}
+	var fDialog=new (function(title){
+		var $sel=$('<select></select>');
+		var $text1=$('<input/>');
+		var $text2=$('<input/>');
+		var $btn1=$('<a href="javascript:void(0)" plain="false"/>').html('新增');
+		var $btn2=$('<a href="javascript:void(0)" plain="false"/>').html('刪除');
+		var $dialog=$('<div style="padding:20px 40px 20px 40px"></div>').append(
+			$('<table cellpadding="5"></table>')
+				.append($('<tr></tr>').append('<td>選擇:</td>').append($sel))	
+				.append($('<tr></tr>').append('<td>群組:</td>').append($text1))
+				.append($('<tr></tr>').append('<td>代碼:</td>').append($text2))
+				.append($('<tr></tr>').append($('<td colspan="2" style="text-align:center"></td>').append($btn1).append($btn2)))
+		);
+		var change;
+		$sel.change(change=function(){
+			var group=$(this).find(':selected').val();
+			if(group && group.trim()!='')$text1.textbox('setText',group);
+		});
+		$text1.textbox();
+		$text2.textbox();
+		$btn1.linkbutton({iconCls:'icon-add'}).click(function(){addGroup();$dialog.dialog('close');});
+		$btn2.linkbutton({iconCls:'icon-cancel'}).click(function(){removeGroup();$dialog.dialog('close');});
+		this.dialog1=function(symbol,value){
+			$sel.empty();
+			$.each(fGroup.getOptions(),function(i,e){$sel.append($('<option></option>').attr('value',e).text(e));});
+			if(!value || value=='')value=currentDay();
+			$text1.textbox('setText',value);
+			$text2.textbox('setText',symbol);
+			$dialog.dialog({title:title});
+		};
+		function addGroup(){
+			$.ajax('query',{
+				method:'GET',
+				data:{action:'addGroup',group:$text1.textbox('getText'),value:$text2.textbox('getText')},
+				dataType:'json',
+				async:true,
+				success:function(data){console.log(data);fGroup.getGroups();},error:function(){console.log('failed!');}
+			});
+		}
+		function removeGroup(){
+			$.ajax('query',{
+				method:'GET',
+				data:{action:'removeGroup',group:$text1.textbox('getText'),value:$text2.textbox('getText')},
+				dataType:'json',
+				async:true,
+				success:function(data){remove($text2.textbox('getText'));console.log(data);},error:function(){console.log('failed!');}
+			});
+		}
+	})('編輯自選');
+	function stockTr(symbol,tab){
+		symbol=dig4(symbol);
+		var canvas;
+		var $tr0=$('<tr></tr>');
+		var $tr1=$('<tr></tr>');
+		$tr0.append('<td width="1px">'+(++index)+'</td>').append(
+			$('<td width="1px"></td>').append(
+			$('<div></div>').append(
+				$('<button/>').html('日').click(function(){
+					$tr1.toggle();
+					if(!canvas)canvas=new stockCanvas($tr1.children('td').children('div').get(0),symbol,service);
+					canvas.setInfo(symbols[symbol].stock);
+				})
+			)
+			.append($('<button/>').html('更').click(function(){addSymbol([symbol]);})))
+		).append('<td width="1px">'+symbol+'&nbsp;</td>').append('<td width="90px">&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>')
+		.append('<td>&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>')
+		.append('<td>&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>').append('<td>&nbsp;</td>')
+		.append('<td>&nbsp;</td>').append('<td>&nbsp;</td>');
+		$tr0.children('td').eq(1).children('div').append(
+			$('<button/>').html('選').click(function(){fDialog.dialog1(symbol,fGroup.getSel().find(':selected').val());})
+		).append(
+			$('<button/>').html('刪').click(function(){$extDiv.empty().hide();remove(symbol);})
+		).append(
+			$('<button/>').html('交').click(function(){bDialog1.dialog1(symbol,symbols[symbol].stock.close);})
+		);
+		$('<td colspan='+$tr0.children('td').size()+'>').append('<div></div>').appendTo($tr1);
+		$(tab).append($tr0).append($tr1.hide());
+		$tr0.children('td').eq(1).width($('td div button',$tr0).eq(0).outerWidth()*$('td div button',$tr0).size()+2);
+		$tr0.children('td').eq(0).width(40);
+		var $extDiv=$('<div style="display:none;position:absolute;border:3px solid blue;background-color:white"></div>').appendTo(document.body);
+		$tr0.children('td').eq(8).hover(function(){
+			$tr0.css('border','3px solid blue');
+			$tr0.children('td').eq(3).css({'background-color':'orange'}).children('span').css('color','white');
+			$extDiv.append(extTab(symbols[symbol].stock))
+				.css({left:$tr0.children('td').eq(4).offset().left,top:$tr0.offset().top+$tr0.outerHeight()}).show();
+		},function(){
+			$tr0.css('border','0px');
+			$tr0.children('td').eq(3).css({'background-color':'white'}).children('span').css('color','blue');
+			$extDiv.empty().hide();
+		});
+		$tr0.hover(function(){$(this).css({'background-color':'#FFFFAA'});},function(){$(this).css({'background-color':'#FFFFFF'});});
+		return {tr0:$tr0.get(0),tr1:$tr1.get(0)};
+	}
+	function extTab(stock){
+		var array=[['現價',stock.close,per(stock.close,stock.yes),per(stock.close,stock.m20)],
+			['最高',stock.high,per(stock.high,stock.yes),per(stock.high,stock.m20)],
+			['最低',stock.low,per(stock.low,stock.yes),per(stock.low,stock.m20)],
+			['漲停',stock.u,per(stock.u,stock.yes),per(stock.u,stock.m20)],
+			['跌停',stock.w,per(stock.w,stock.yes),per(stock.w,stock.m20)],
+			['月均',Math.round(stock.m20*100)/100,per(stock.m20,stock.yes),per(stock.m20,stock.m20)],
+			['上限',Math.round(stock.bbh*100)/100,per(stock.bbh,stock.yes),per(stock.bbh,stock.m20)],
+			['下限',Math.round(stock.bbl*100)/100,per(stock.bbl,stock.yes),per(stock.bbl,stock.m20)]
+		];
+		if(stock.level1){
+			array.push(['關卡1',Math.round(stock.level1*100)/100,per(stock.level1,stock.yes),per(stock.level1,stock.m20)]);
+			array.push(['關卡2',Math.round(stock.level2*100)/100,per(stock.level2,stock.yes),per(stock.level2,stock.m20)]);
+			array.push(['關卡3',Math.round(stock.level3*100)/100,per(stock.level3,stock.yes),per(stock.level3,stock.m20)]);
+		}
+		array.sort(function(a,b){return b[1]-a[1];});
+		var $tab=$("<table border='1' cellpadding='5' style='border-collapse:collapse;font-size:10px;text-align:right'></table");
+		$.each(array,function(i,e){
+			$tab.append($('<tr></tr>').append($('<td></td>').html(e[0])).append($('<td></td>').html(e[1])).append($('<td></td>').html(e[2]))
+				.append($('<td></td>').html(e[3])));
+		});
+		$tab.css({'background-color':'#ffffd1'});
+		return $tab;
+	}
+	function per(n1,n2){return Math.round((n1-n2)/n2*1000)/10+' %';}
+	function addSymbol(_symbols){
+		if(!_symbols){_symbols=[];for(var i in symbols)_symbols.push(i);}
+		if(_symbols && _symbols.length){
+			var array=[];
+			for(var s=0;s<_symbols.length;s++){
+				var symbol=_symbols[s].toString();
+				symbol=dig4(symbol);
+				if(!symbols[symbol])symbols[symbol]=stockTr(symbol,tab);
+				array.push(symbol);
+			}
+			if(array.length)service.getStockNows(arrayToString(array),thiz);
+		}
+	}
+	this.addSymbol=addSymbol;
+	this.refresh=function(stock){
+		if(stock){
+			var symbol=stock.symbol.toString();
+			symbol=dig4(symbol);
+			if(symbols[symbol]){
+				symbols[symbol].stock=stock;
+				var $tr0=$(symbols[symbol].tr0);
+				$tr0.css('color',stock.change*1>0?'red':'green');
+				var mark;
+				if(stock.changey*1>3)
+					mark='<span style="background-color:red;color:white"></span>';
+				else if(stock.changey*1<-3)
+					mark='<span style="background-color:green;color:white"></span>';
+				else if(stock.changey*1>0)
+					mark='<span style="background-color:white;color:red"></span>';
+				else
+					mark='<span style="background-color:white;color:green"></span>';
+				var mark1;
+				if(stock.changey*1>0)mark1='<div style="border:1px solid red;padding-right:8px;text-align:right"></div>';
+				else mark1='<div style="border:1px solid green;padding-right:8px;text-align:right"></div>';
+				$tr0.children('td').eq(3).empty().append($('<span style="color:blue"></span>').html(stock.name));
+				$tr0.children('td').eq(4).html(stock.yes);
+				$tr0.children('td').eq(5).html(stock.open);
+				$tr0.children('td').eq(6).empty().append(markH(stock.high,stock.high*1>=stock.bbh*1));
+				$tr0.children('td').eq(7).empty().append(markH(stock.low,stock.low*1<=stock.bbl*1));
+				$tr0.children('td').eq(8).empty().append($(mark1).html(stock.close));
+				$tr0.children('td').eq(9).empty().append($(mark).html(stock.change+' ('+stock.changey+'&nbsp;&nbsp;%'+')'));
+				$tr0.children('td').eq(10).html(Math.round(stock.bbl*100)/100+' ~ '+Math.round(stock.bbh*100)/100);
+				$tr0.children('td').eq(11).empty().append(markH(stock.bias+'&nbsp;&nbsp;%',Math.abs(stock.bias)>=6));
+				$tr0.children('td').eq(12).html(Math.round(stock.m20*100)/100);
+				$tr0.children('td').eq(13).html(Math.round(stock.level1*100)/100);
+				$tr0.children('td').eq(14).html(Math.round(stock.level2*100)/100);
+				$tr0.children('td').eq(15).html(Math.round(stock.level3*100)/100);
+				$tr0.children('td').eq(16).html(stock.time+'&nbsp;&nbsp;&nbsp;'+stock.dateDay);
+				if(stock.bsMaxDateDay)
+				$tr0.children('td').eq(17).html(stock.bsMax+'&nbsp;&nbsp;('+stock.bsMaxDateDay+')');
+			}
+		}
+	}
+	function markH(val,flag){return $('<span></span>').html(val).css(flag?{'background-color':'blue',color:'white','padding':'3px'}:{});}
+	function getGroup(group){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'getGroup',group:group},
+			dataType:'json',
+			async:true,
+			success:function(data){
+				if(data && data.symbols)addSymbol(data.symbols);
+			},error:function(){console.log('failed!');}
+		});
+	}
+	function arrayToString(array){
+		var str='';
+		for(var i=0;i<array.length;i++)str+=array[i]+(i<array.length-1?',':'');
+		return str;
+	}
+	function remove(symbol){
+		if(symbols[symbol]){
+			$(symbols[symbol].tr0).remove();
+			$(symbols[symbol].tr1).remove();
+			symbols[symbol]=null;
+		}
+	}
+	function removeGroup(group){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'removeGroup',group:group},
+			dataType:'json',
+			async:true,
+			success:function(data){fGroup.getGroups();console.log(data);},error:function(){console.log('failed!');}
+		});
+	}
+	function currentDay(){
+		var date=new Date();
+		var month=date.getMonth()*1+1;
+		var day=date.getDate();
+		return ((date.getFullYear()-1911).toString()+(month<10?'0'+month:month)+(day<10?'0'+day:day))*1;
+	}
+	var bDialog1=new (function(title){
+		var $tSymbol=$('<input/>'),$tDateDay1=$('<input/>'),$tPrice1=$('<input/>'),$tCounts=$('<input/>');
+		var $btn1=$('<a href="javascript:void(0)" plain="false"/>').html('買');
+		var $btn2=$('<a href="javascript:void(0)" plain="false"/>').html('賣');
+		var $err=$('<span style="color:red"/>');
+		var $dialog=$('<div style="padding:20px 40px 20px 40px"></div>').append(
+			$('<table cellpadding="5"></table>')
+				.append($('<tr></tr>').append('<td>股票代號:</td>').append($tSymbol))	
+				.append($('<tr></tr>').append('<td>日期:</td>').append($tDateDay1))
+				.append($('<tr></tr>').append('<td>價格:</td>').append($tPrice1))
+				.append($('<tr></tr>').append('<td>張數:</td>').append($tCounts))
+				.append($('<tr></tr>').append('<td>&nbsp;</td>').append($err))
+				.append($('<tr></tr>').append($('<td colspan="2" style="text-align:center"></td>').append($btn1).append($btn2)))
+		);
+		$tSymbol.textbox();$tDateDay1.textbox();$tPrice1.textbox();$tCounts.textbox();
+		$btn1.linkbutton({iconCls:'icon-add'}).click(function(){saveRecord(1);});
+		$btn2.linkbutton({iconCls:'icon-remove'}).click(function(){saveRecord(-1);});
+		this.dialog1=function(symbol,price){
+			$tSymbol.textbox('setText',symbol);
+			$tDateDay1.textbox('setText',currentDay());
+			$tPrice1.textbox('setText',price);
+			$tCounts.textbox('setText',1);
+			$err.html('');
+			$dialog.dialog({title:title});
+		};
+		function saveRecord(buySell){
+			$.ajax('query',{
+				method:'GET',
+				data:{action:'saveRecord',symbol:$tSymbol.textbox('getText'),dateDay1:$tDateDay1.textbox('getText'),
+					price1:$tPrice1.textbox('getText'),counts:$tCounts.textbox('getText'),buySell:buySell},
+				dataType:'json',
+				async:true,
+				success:function(data){if(data)if(data.err)$err.html(data.err);else{console.log(data);$dialog.dialog('close');}},
+				error:function(){console.log('failed!');}
+			});
+		}
+	})('模擬下單');
+}
+function timebox(fx){
+	var timer,times,time;
+	var $timebox=$("<input type='text' size='2'/>").blur(function(){timing(this.value);}).mousedown(function(){timing(0);});
+	function timing(_time){
+		if(timer)clearTimeout(timer);
+		$timebox.val(isNaN(_time)?time:_time);
+		if(!isNaN(_time))time=times=_time;
+		if(times==0)return;
+		if(!$timebox.width())return;
+		if(time--<=0){
+			fx();
+			time=times;
+		}
+		timer=setTimeout(timing,1000);
+	}
+	return $timebox;
+}
+function stockRecordButton(bdiv,div){
+	var $tab;
+	this.show=function(){
+		$(bdiv).append($('<button/>').html('stockRecordButton').click(
+			function(){
+				$tab=$("<table border='1' style='border-collapse:collapse;font-size:10px;' width='100%'>").append(
+					$('<tr></tr>').append('<td>序號</td><td>功能</td><td>股票</td><td>日期1</td><td>價格1</td><td>張數</td><td>買賣</td>')
+					.append('<td>日期2</td><td>價格2</td><td>漲跌</td>')
+				);
+				$(div).empty().width($(window).width()*0.5).show().append(
+					$('<span></span>').append($('<button></button>').html('getRecords').click(getRecords))
+				).append(new timebox(getRecords)).append($tab);
+				$('tr',$tab).eq(0).append('<td>盈虧</td><td>金額</td>');
+			}
+		));
+	}
+	function recordTr(record,tab){
+		record.symbol=dig4(record.symbol);
+		var m1=Math.round((record.price2*1-record.price1*1)*100)/100;
+		var m2=Math.round(m1*record.buySell/record.price1*1000)/10+'&nbsp;&nbsp;%';
+		var m3=m1*record.buySell*record.counts*1000;
+		var $tr0=$('<tr></tr>').append($('<td></td>').html(record.id)
+			).append($('<td></td>').append($('<div style="text-align:right"></div>'))
+			).append($('<td></td>').html(record.symbol+'&nbsp;&nbsp;'+record.name)
+			).append($('<td></td>').html(record.dateDay1)
+			).append($('<td></td>').html(record.price1)
+			).append($('<td></td>').html(record.counts)
+			).append($('<td></td>').html(record.buySell=='1'?'買':record.buySell=='-1'?'空':'?')
+			).append($('<td></td>').html(record.dateDay2)
+			).append($('<td></td>').html(record.price2)
+			).append($('<td style="text-align:right"></td>').html(m1)
+			).append($('<td style="text-align:right"></td>').html(m2)
+			).append($('<td style="text-align:right"></td>').html(m3)
+		);
+		$tr0.children('td').eq(2).css('color',m3*1>0?'red':'green');
+		$tr0.children('td').eq(11).css('background-color',m3*1>0?'#ffaaaa':'#aaffaa');
+		$(tab).append($tr0);
+		if(!record.dateDay2)
+			$('td div',$tr0).append(
+				$('<button></button>').html('停').click(function(){bDialog2.dialog1(record.id,record.symbol,record.price2,record.counts,record.buySell);})
+			);
+		$('td div',$tr0).append($('<button></button>').html('刪').click(function(){removeRecord(record.id);}))
+		$tr0.children('td').eq(1).width($('td div button',$tr0).eq(0).outerWidth()*2+2);
+	}
+	function getRecords(){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'getRecords'},
+			dataType:'json',
+			async:true,
+			success:function(data){
+				if(data){
+					$tab.children('tbody').children('tr').each(function(i){if(i>0)$(this).remove();});
+					var temp=[];
+					for(var i in data)data[i].symbol=dig4(data[i].symbol);
+					for(var i in data)temp.push(data[i]);
+					temp.sort(function(a,b){return a.dateDay2?b.dateDay2?b.dateDay1*1-a.dateDay1*1:1:b.dateDay2?-1:b.dateDay1*1-a.dateDay1*1;});
+					for(var i=0;i<temp.length;i++)new recordTr(temp[i],$tab.get(0));
+				}
+			},
+			error:function(){console.log('failed!');}
+		});
+	}
+	function removeRecord(id){
+		$.ajax('query',{
+			method:'GET',
+			data:{action:'removeRecord',id:id},
+			dataType:'json',
+			async:true,
+			success:function(data){getRecords();},
+			error:function(){console.log('failed!');}
+		});
+	}
+	var bDialog2=new (function(title){
+		var id,$tSymbol=$('<input/>'),$tDateDay2=$('<input/>'),$tPrice2=$('<input/>'),$tCounts=$('<input/>');
+		var $btn=$('<a href="javascript:void(0)" plain="false"/>');
+		var $err=$('<span style="color:red"/>');
+		var $dialog=$('<div style="padding:20px 40px 20px 40px"></div>').append(
+			$('<table cellpadding="5"></table>')
+				.append($('<tr></tr>').append('<td>股票代號:</td>').append($tSymbol))	
+				.append($('<tr></tr>').append('<td>日期:</td>').append($tDateDay2))
+				.append($('<tr></tr>').append('<td>價格:</td>').append($tPrice2))
+				.append($('<tr></tr>').append('<td>張數:</td>').append($tCounts))
+				.append($('<tr></tr>').append('<td>&nbsp;</td>').append($err))
+				.append($('<tr></tr>').append($('<td colspan="2" style="text-align:center"></td>').append($btn)))
+		);
+		$tSymbol.textbox();$tDateDay2.textbox();$tPrice2.textbox();$tCounts.textbox();
+		$btn.linkbutton({iconCls:'icon-ok'}).click(function(){updateRecord();});
+		this.dialog1=function(_id,symbol,price,counts,buySell){
+			id=_id;
+			$tSymbol.textbox('setText',symbol);
+			$tDateDay2.textbox('setText',currentDay());
+			$tPrice2.textbox('setText',price);
+			$tCounts.textbox('setText',counts).textbox('readonly');
+			$err.html('');
+			$btn.linkbutton({text:buySell=='1'?'賣出':buySell=='-1'?'回補':'?'});
+			$dialog.dialog({title:title});
+		};
+		function updateRecord(){
+			$.ajax('query',{
+				method:'GET',
+				data:{action:'updateRecord',
+					id:id,dateDay2:$tDateDay2.textbox('getText'),price2:$tPrice2.textbox('getText'),counts:$tCounts.textbox('getText')},
+				dataType:'json',
+				async:true,
+				success:function(data){if(data)if(data.err)$err.html(data.err);else{getRecords();$dialog.dialog('close');}},
+				error:function(){console.log('failed!');}
+			});
+		}
+	})('模擬下單');
+	function currentDay(){
+		var date=new Date();
+		var month=date.getMonth()*1+1;
+		var day=date.getDate();
+		return ((date.getFullYear()-1911).toString()+(month<10?'0'+month:month)+(day<10?'0'+day:day))*1;
+	}
+}
+function dig3(num){return num*1<100?'0'+num:num;}
+function dig4(num){return num*1<100?'00'+num*1:num*1<1000?'0'+num*1:num*1;}
+console.log('update(symbol,yearMonth-1)'+':'+('22'+'3').toString()+'-1='+(('22'+'3').toString()-1));
+</script>
+</head>
+<body>
+<div class='buttonArray'></div>
+<div class='buttonForm'></div>
+<div class='testForm'></div><div class='displayArray'></div>
+<div class='stockJobMapDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<div class='stockStatusDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<div class='stockMapDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<div class='stockNowsDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<div class='stockCanvasDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<div class='stockRecordDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<div class='stockNewsDiv' style="width:0px;padding:0;border:1px solid blue"></div>
+<pre style="display:none">
+A227659028,0720921
+329.713
+
+br = new BufferedReader(new InputStreamReader(stockUrl.openStream()));
+br = new BufferedReader(new InputStreamReader(stockUrl.openStream(), "UTF-8"));
+
+if (status.getStatus() == 0 && fail <= fails){
+if (status.getStatus() == 0 && fail <= fails){
+
+(abscrv.3434.12.42)
+checkSpan4(43角+owo+nwip)+(txt9.gmail.pdf.apk)
+
+Long saveStock(Stock stock);
+	Long saveStocks(List<Stock> stocks);
+	
+long saveStock(Stock stock);
+	long saveStocks(List<Stock> stocks);
+	
+Date getDate(String strDate);
+Date getDate(String strDate);
+data:{action:'removeGroup',group:
+$sel.change(change=function(){
+$tr0.children('td').eq(1).width($('td div button',$tr0).eq(0).outerWidth()*
+var fDialog=new (function(title){
+</pre>
+</body>
+<script>
+</script>
+</html>

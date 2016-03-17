@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>admin</title>
+	<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+	<script type="text/javascript" src="jquery/jquery.min.js"></script>
+<script>
+	function createUser(userName,password,callback,idDiv){ //*8
+		if(userName && password) //*6
+		$.ajax('admin/users/'+userName,{method:'POST',dataType:'json',data:{password:password}, //*7
+			success:function(data){msg(data.userName+'='+data.password,null,idDiv);callback();}, //*7
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);} //*7
+		});
+	}
+	function removeUser(userName,callback,idDiv){
+		if(userName)
+		$.ajax('admin/users/'+userName,{method:'DELETE',dataType:'json',
+			success:function(data){msg(data.userName+'=removeUser',null,idDiv);callback();},
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);}
+		});
+	}
+	function createUserRole(userName,role,callback,idDiv){
+		if(userName && role)
+		$.ajax('admin/roles/'+userName,{method:'POST',dataType:'json',data:{role:role},
+			success:function(data){msg(data.userName+'='+data.role,null,idDiv);callback();},
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);}
+		});
+	}
+	function removeUserRole(userName,role,callback,idDiv){
+		if(userName)
+		$.ajax('admin/roles/'+userName+'?role='+role,{method:'DELETE',dataType:'json',data:{role:role},
+			success:function(data){msg(data.count+'=removeUserRole',null,idDiv);callback();},
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);}
+		});
+	}
+	function setUserEnabled(userName,enabled,callback,idDiv){
+		if(userName)
+		$.ajax('admin/users/'+userName+'/prop',{method:'POST',dataType:'json',data:{enabled:enabled},
+			success:function(data){msg(data.userName+'='+data.enabled,null,idDiv);callback();},
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);}
+		});
+	}
+	function changeUserPassword(userName,password,callback,idDiv){
+		if(userName && password)
+		$.ajax('admin/users/'+userName+'/prop',{method:'POST',dataType:'json',data:{password:password},
+			success:function(data){msg(data.userName+'='+data.password,null,idDiv);callback();},
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);}
+		});
+	}
+	function getUsers(callback,idDiv){
+		var $ul=$("<ul style='list-style-type:none;margin:5px;padding:5px;'></ul>");
+		$.ajax('admin/users/',{method:'GET',dataType:'json',
+			success:function(data){msg(data.length+'=getUsers',null,idDiv);
+				if(data && data.length)
+					$.each(data,function(i,r){
+						var $li=$('<li></li>').append(
+							$('<input type="checkbox" />').attr('checked',r.user.enabled).click(function(){
+								setUserEnabled(r.user.userName,$(this).prop('checked'),function(){getUsers(callback,idDiv);},idDiv);
+							})
+						).append($('<span class="userName" style="margin-right:10px"></span>').html(r.user.userName)).appendTo($ul);
+						$.each(r.roles,function(i,r){$li.append($('<span class="role" style="margin-right:5px"></span>').html('['+r+']'))});
+					});
+				callback($ul);
+			},
+			error:function(jqXHR,textStatus,errorThrown){msg(null,errorThrown,idDiv);}
+		});
+	}
+	function msg(success,error,idDiv){
+		if(idDiv){
+			if(error)$(idDiv).append($('<div></div>').css('color','red').html(error));
+			else $(idDiv).append($('<div></div>').css('color','black').html(success));
+			while($(idDiv).children('div').size()>6)$(idDiv).children('div').eq(0).remove();
+		}
+	}
+</script>
+</head>
+<body>
+	<table border='1' style='border-collapse:collapse;width:100%;'>
+		<tr>
+			<td width='130px'>users/{userName}</td>
+			<td>
+				<table>
+					<tr><td width='100px'>userName:</td><td align='left'><input type='text' id='inputUserName' /></td></tr>
+					<tr><td>password:</td><td align='left'><input type='password' id='inputPassword' /></td></tr>
+					<tr>
+						<td colspan='2'>
+							<input type='button' value='createUser' id='btnCreateUser' />
+							<input type='button' value='changePassword' id='btnChangePassword' />
+						</td>
+					</tr>
+					<tr><td colspan='2'><div id='divMsg1'></div></td></tr>
+				</table>
+			</td>
+		</tr>
+		<tr>
+			<td>users/&nbsp;&nbsp;<input type='button' value='getUsers' id='btnGetUsers' /></td>
+			<td>
+				<table style='width:100%'>
+					<tr>
+						<td>
+							<input type='text' readonly='readonly' id='inputUser'/>
+							<input type='text' id='inputRole'/>
+							<input type='button' value='+Role' id='btnCreateUserRole' />
+							<input type='button' value='-Role' id='btnRemoveUserRole' />
+							<input type='button' value='-User' id='btnRemoveUser' />
+						</td>
+					</tr>
+					<tr><td id='tdUsers'></td></tr>
+				</table>
+			</td>
+		</tr>
+		<tr><td colspan='2'><div id='divMsg2'></div></td></tr>
+	</table>
+</body>
+<script>
+	var callback=function(){$('#btnGetUsers').trigger('click');};
+	$('#btnGetUsers').click(function(){
+		getUsers(function($ul){
+			$('#tdUsers').empty().append($ul);
+			$ul.children('li').each(function(){
+				$(this).click(function(){$('#inputUser').val($(this).children('span.userName').html());});
+				$(this).children('span.role').click(function(){$('#inputRole').val($(this).html().replace(/[\[\]]/g,''));});
+			});
+		},'#divMsg2');
+	});
+	$('#btnCreateUser').click(function(){createUser($('#inputUserName').val(),$('#inputPassword').val(),callback,'#divMsg2');});
+	$('#btnRemoveUser').click(function(){removeUser($('#inputUser').val(),callback,'#divMsg2');});
+	$('#btnCreateUserRole').click(function(){createUserRole($('#inputUser').val(),$('#inputRole').val(),callback,'#divMsg2');});
+	$('#btnRemoveUserRole').click(function(){removeUserRole($('#inputUser').val(),$('#inputRole').val(),callback,'#divMsg2');});
+	$('#btnChangePassword').click(function(){changeUserPassword($('#inputUserName').val(),$('#inputPassword').val(),callback,'#divMsg2');});
+</script>
+</html>
